@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rocketchat
+  labels:
+    app: rocketchat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rocketchat
+  template:
+    metadata:
+      labels:
+        app: rocketchat
+    spec:
+      containers:
+      - name: rocketchat
+        image: rocketchat/rocket.chat:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: MONGO_URL
+          value: "mongodb://root:password@mongo:27017/rocketchat?authSource=admin"
+        - name: ROOT_URL
+          value: "http://localhost:3000"
+        - name: PORT
+          value: "3000"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocketchat
+spec:
+  type: LoadBalancer # Change à ClusterIP si tu ne veux pas l'exposer
+  ports:
+  - port: 3000
+    targetPort: 3000
+  selector:
+    app: rocketchat
