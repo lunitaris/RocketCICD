@@ -1,20 +1,71 @@
+# Définition des stages de la pipeline
 stages:
   - build
+  - lint
   - test
+  - quality
+  - security
+  - deploy
 
+# Variables pour Docker
 variables:
   DOCKER_DRIVER: overlay2
+  SONAR_HOST_URL: "http://your-sonarqube-instance:9000" # Remplace par l'URL de ton instance SonarQube
+  SONAR_LOGIN: "your-sonarqube-token" # Token d'authentification pour SonarQube
 
+# Service Docker nécessaire pour construire des images
 services:
   - docker:dind
 
+# Build de l'image Docker
 build:
   stage: build
   script:
     - docker build -t rocket-chat .
 
-test:
+# Analyse de la qualité du code avec SonarQube
+sonarqube:
+  stage: quality
+  image:
+    name: sonarsource/sonar-scanner-cli:latest
+    entrypoint: [""]
+  script:
+    - sonar-scanner -Dsonar.projectKey=rocket-chat
+                   -Dsonar.sources=.
+                   -Dsonar.host.url=$SONAR_HOST_URL
+                   -Dsonar.login=$SONAR_LOGIN
+  allow_failure: true # Rend l'étape non bloquante
+
+# Linter pour le JavaScript
+eslint:
+  stage: lint
+  image: node:latest
+  script:
+    - npm install eslint -g # Installe ESLint globalement
+    - eslint ./app # Scanne les fichiers JavaScript dans le répertoire app
+  allow_failure: false # L'étape échoue si des erreurs sont détectées
+
+# Tests d'intégration pour vérifier que l'application se lance correctement
+integration_test:
   stage: test
   script:
-    - docker-compose up -d
-    - docker-compose exec rocketchat curl -f http://localhost:3000 || exit 1
+    - docker-compose up -d # Lancer MongoDB et Rocket.Chat
+    - docker-compose exec rocketchat curl -f http://localhost:3000 || exit 1 # Vérifier que Rocket.Chat est actif
+
+# Scan de sécurité de l'image Docker avec Trivy
+trivy_scan:
+  stage: security
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  script:
+    - trivy image --severity HIGH,CRITICAL rocket-chat # Scanne l'image pour des vulnérabilités de sécurité
+
+# Déploiement sur Kubernetes
+deploy:
+  stage: deploy
+  script:
+    - kubectl apply -f k8s/mongo-deployment.yaml
+    - kubectl apply -f k8s/rocketchat-deployment.yaml
+  only:
+    - main
